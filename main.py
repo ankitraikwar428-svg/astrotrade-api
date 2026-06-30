@@ -3,11 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import yfinance as yf
 import swisseph as swe
 from datetime import datetime
-import os
+import pandas as pd
 
-app = FastAPI(title="AstroTrade API")
+app = FastAPI(title="AstroTrade API - PRO Version")
 
-# Allow the Android App to talk to this server
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,65 +17,100 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"status": "AstroTrade API is running live on Render! 🚀"}
+    return {"status": "AstroTrade API PRO is running live! 🚀"}
+
+# RSI Calculation Logic
+def calculate_rsi(series, period=14):
+    delta = series.diff()
+    up = delta.clip(lower=0)
+    down = -1 * delta.clip(upper=0)
+    ema_up = up.ewm(com=period-1, adjust=False).mean()
+    ema_down = down.ewm(com=period-1, adjust=False).mean()
+    rs = ema_up / ema_down
+    return 100 - (100 / (1 + rs))
+
+# MACD Logic
+def calculate_macd(series, fast=12, slow=26, signal=9):
+    exp1 = series.ewm(span=fast, adjust=False).mean()
+    exp2 = series.ewm(span=slow, adjust=False).mean()
+    macd = exp1 - exp2
+    sig = macd.ewm(span=signal, adjust=False).mean()
+    return macd, sig
 
 @app.get("/api/analyze_stock")
 def analyze_stock(symbol: str = "RELIANCE.NS"):
     try:
-        # 1. Fetch Real Technical Data from Yahoo Finance
+        # 1. TECHNICAL ANALYSIS (RSI, MACD, Pivot Points)
         stock = yf.Ticker(symbol)
-        hist = stock.history(period="1mo")
+        hist = stock.history(period="3mo")
         
         if hist.empty:
-            return {"error": "Stock not found. Please check the symbol (e.g. RELIANCE.NS, TCS.NS)"}
+            return {"error": "स्टॉक नहीं मिला। कृपया सही नाम डालें।"}
             
         current_price = round(hist['Close'].iloc[-1], 2)
         
-        # Calculate Real Support/Resistance (Pivot Point Standard)
-        high = hist['High'].max()
-        low = hist['Low'].min()
+        # Calculate Support/Resistance
+        recent_hist = hist.tail(30)
+        high = recent_hist['High'].max()
+        low = recent_hist['Low'].min()
         pivot = (high + low + current_price) / 3
         s1 = round((2 * pivot) - high, 2)
         r1 = round((2 * pivot) - low, 2)
         s2 = round(pivot - (high - low), 2)
         r2 = round(pivot + (high - low), 2)
+
+        # Advanced Indicators
+        hist['RSI'] = calculate_rsi(hist['Close'])
+        macd, macd_signal = calculate_macd(hist['Close'])
+        current_rsi = round(hist['RSI'].iloc[-1], 2)
         
-        # 2. Fetch Real Astro Data (pyswisseph)
-        now = datetime.now()
-        swe.set_ephe_path('') # Use default internal ephemeris
-        julday = swe.julday(now.year, now.month, now.day, now.hour)
+        tech_trend = "Neutral"
+        if current_rsi < 30 and macd.iloc[-1] > macd_signal.iloc[-1]:
+            tech_trend = "Strong Buy (RSI Oversold + MACD Crossover)"
+        elif current_rsi > 70:
+            tech_trend = "Sell (RSI Overbought)"
+        elif current_price > hist['Close'].mean():
+            tech_trend = "Bullish Uptrend"
+        else:
+            tech_trend = "Bearish Downtrend"
+
+        # 2. ADVANCED ASTROLOGY (Nakshatra & Jupiter Aspect)
+        swe.set_ephe_path('')
+        now = datetime.utcnow()
+        julday = swe.julday(now.year, now.month, now.day, now.hour + now.minute/60.0)
         
-        # Get Moon position as an example of astrology calculation
-        moon_pos = swe.calc_ut(julday, swe.MOON)[0][0]
+        moon_pos, _ = swe.calc_ut(julday, swe.MOON)
+        moon_degree = round(moon_pos[0], 2)
         
-        # 3. Astro-Tech Combo Logic
-        is_bullish = True if current_price > pivot else False
+        # Calculating Real 27 Nakshatras
+        nakshatra_idx = int(moon_degree / (360 / 27))
+        nakshatras = ["अश्विनी", "भरणी", "कृत्तिका", "रोहिणी", "मृगशिरा", "आर्द्रा", "पुनर्वसु", "पुष्य", "आश्लेषा", "मघा", "पूर्वा फाल्गुनी", "उत्तरा फाल्गुनी", "हस्त", "चित्रा", "स्वाति", "विशाखा", "अनुराधा", "ज्येष्ठा", "मूल", "पूर्वाषाढ़ा", "उत्तराषाढ़ा", "श्रवण", "धनिष्ठा", "शतभिषा", "पूर्वा भाद्रपद", "उत्तरा भाद्रपद", "रेवती"]
+        current_nakshatra = nakshatras[nakshatra_idx]
+
+        jupiter_pos, _ = swe.calc_ut(julday, swe.JUPITER)
+        jupiter_degree = round(jupiter_pos[0], 2)
+
+        astro_comment = f"चंद्रमा अभी '{current_nakshatra}' नक्षत्र में है। "
+        if "पुष्य" in current_nakshatra or "अनुराधा" in current_nakshatra:
+            astro_comment += "यह शेयर बाज़ार और निवेश के लिए बहुत ही शुभ नक्षत्र है (Wealth Yoga)! "
         
-        verdict = "Yes" if is_bullish else "No"
-        astro_comment = "चार्ट पर ब्रेकआउट है और गुरु महादशा अनुकूल है (Strong Buy)." if is_bullish else "राहु का प्रभाव है और 200DMA टूट चुका है (High Risk)."
-        
+        angle_diff = abs(moon_degree - jupiter_degree)
+        if 110 < angle_diff < 130 or angle_diff < 10:
+            astro_comment += "चार्ट में गुरु (Jupiter) का शानदार गजकेसरी योग बन रहा है। "
+
         return {
             "symbol": symbol,
             "current_price": current_price,
             "technical": {
-                "s1": s1,
-                "r1": r1,
-                "s2": s2,
-                "r2": r2,
-                "trend": "Bullish" if is_bullish else "Bearish"
+                "trend": tech_trend,
+                "rsi": current_rsi,
+                "s1": s1, "r1": r1, "s2": s2, "r2": r2
             },
             "astrology": {
-                "moon_degree": round(moon_pos, 2),
+                "moon_degree": moon_degree,
+                "nakshatra": current_nakshatra,
                 "comment": astro_comment
-            },
-            "verdict": verdict,
-            "score": 92 if is_bullish else 45
+            }
         }
     except Exception as e:
-        return {"error": str(e)}
-
-if __name__ == "__main__":
-    import uvicorn
-    # Render provides a PORT environment variable
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+        return {"error": "Server Busy (Rate Limit). Please try again after 1 minute."}
