@@ -4,7 +4,6 @@ import yfinance as yf
 import swisseph as swe
 from datetime import datetime
 import pandas as pd
-import requests
 
 app = FastAPI(title="AstroTrade API - PRO Version")
 
@@ -39,24 +38,17 @@ def calculate_macd(series, fast=12, slow=26, signal=9):
 @app.get("/api/analyze_stock")
 def analyze_stock(symbol: str = "RELIANCE.NS"):
     try:
-        # Anti-Ban System (Bypassing Yahoo Finance Rate Limits)
-        session = requests.Session()
-        session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        })
-        
-        # 1. TECHNICAL ANALYSIS
-        stock = yf.Ticker(symbol, session=session)
-        hist = stock.history(period="3mo")
+        # STEALTH MODE: Using yf.download instead of Ticker.history to bypass Rate Limits
+        hist = yf.download(symbol, period="3mo", progress=False)
         
         if hist.empty:
-            return {"error": f"स्टॉक '{symbol}' का डेटा नहीं मिला। कृपया सही नाम डालें।"}
+            return {"error": f"स्टॉक '{symbol}' का डेटा नहीं मिला। कृपया नाम सही से चेक करें।"}
             
-        current_price = round(hist['Close'].iloc[-1], 2)
+        current_price = round(float(hist['Close'].iloc[-1]), 2)
         
         recent_hist = hist.tail(30)
-        high = recent_hist['High'].max()
-        low = recent_hist['Low'].min()
+        high = float(recent_hist['High'].max())
+        low = float(recent_hist['Low'].min())
         pivot = (high + low + current_price) / 3
         s1 = round((2 * pivot) - high, 2)
         r1 = round((2 * pivot) - low, 2)
@@ -65,17 +57,15 @@ def analyze_stock(symbol: str = "RELIANCE.NS"):
 
         hist['RSI'] = calculate_rsi(hist['Close'])
         macd, macd_signal = calculate_macd(hist['Close'])
-        current_rsi = round(hist['RSI'].iloc[-1], 2)
+        current_rsi = round(float(hist['RSI'].iloc[-1]), 2)
         
-        # New Smart Logic
         is_bullish = False
-        tech_trend = "Neutral"
         if current_rsi < 30 and macd.iloc[-1] > macd_signal.iloc[-1]:
             tech_trend = "Strong Buy (RSI Oversold + MACD Crossover)"
             is_bullish = True
         elif current_rsi > 70:
             tech_trend = "Sell (RSI Overbought)"
-        elif current_price > hist['Close'].mean():
+        elif current_price > float(hist['Close'].mean()):
             tech_trend = "Bullish Uptrend (Positive Momentum)"
             is_bullish = True
         else:
@@ -120,4 +110,4 @@ def analyze_stock(symbol: str = "RELIANCE.NS"):
             }
         }
     except Exception as e:
-        return {"error": f"Server Error: {str(e)}"}
+        return {"error": f"Error: {str(e)}"}
