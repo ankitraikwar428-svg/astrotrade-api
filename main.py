@@ -47,7 +47,7 @@ def analyze_stock(symbol: str = "RELIANCE.NS"):
         req = urllib.request.Request(proxy_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
         
         try:
-            response = urllib.request.urlopen(req)
+            response = urllib.request.urlopen(req, timeout=10)
             proxy_data = json.loads(response.read().decode())
             
             if 'contents' not in proxy_data or not proxy_data['contents']:
