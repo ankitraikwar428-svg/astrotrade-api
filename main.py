@@ -113,3 +113,16 @@ def analyze_stock(symbol: str = "RELIANCE.NS"):
             "symbol": symbol,
             "current_price": current_price,
             "is_bullish": is_bullish,
+            "technical": {
+                "trend": tech_trend,
+                "rsi": current_rsi,
+                "s1": s1, "r1": r1, "s2": s2, "r2": r2
+            },
+            "astrology": {
+                "moon_degree": moon_degree,
+                "nakshatra": current_nakshatra,
+                "comment": astro_comment
+            }
+        }
+    except Exception as e:
+        return {"error": f"Error: {str(e)}"}
