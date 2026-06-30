@@ -4,6 +4,7 @@ import swisseph as swe
 from datetime import datetime
 import pandas as pd
 import urllib.request
+import urllib.parse
 import json
 
 app = FastAPI(title="AstroTrade API - Ultimate Version")
@@ -39,13 +40,24 @@ def calculate_macd(series, fast=12, slow=26, signal=9):
 @app.get("/api/analyze_stock")
 def analyze_stock(symbol: str = "RELIANCE.NS"):
     try:
-        # 1. DIRECT YAHOO API FETCH (100% Anti-Block System)
-        url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=3mo"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        # 1. PROXY TUNNEL FETCH (100% Anti-Block System for Render IPs)
+        target_url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=3mo"
+        proxy_url = f"https://api.allorigins.win/get?url={urllib.parse.quote(target_url)}"
+        
+        req = urllib.request.Request(proxy_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
         
         try:
             response = urllib.request.urlopen(req)
-            data = json.loads(response.read().decode())
+            proxy_data = json.loads(response.read().decode())
+            
+            if 'contents' not in proxy_data or not proxy_data['contents']:
+                return {"error": f"सर्वर ब्लॉक: कृपया फिर से कोशिश करें ({symbol})"}
+                
+            data = json.loads(proxy_data['contents'])
+            
+            if 'chart' not in data or 'result' not in data['chart'] or not data['chart']['result']:
+                return {"error": f"स्टॉक '{symbol}' का डेटा नहीं मिला। कृपया नाम सही से चेक करें।"}
+                
             result = data['chart']['result'][0]
             closes = result['indicators']['quote'][0]['close']
             highs = result['indicators']['quote'][0]['high']
